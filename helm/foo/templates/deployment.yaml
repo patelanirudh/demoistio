@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: { { include "foo.fullname" . } }
+  namespace: { { .Values.namespace } }
+  labels:
+    { { - include "foo.labels" . | nindent 4 } }
+spec:
+  { { - if not .Values.autoscaling.enabled } }
+  replicas: { { .Values.replicaCount } }
+  { { - end } }
+  selector:
+    matchLabels:
+      app: foo
+      { { - include "foo.selectorLabels" . | nindent 6 } }
+  template:
+    metadata:
+      { { - with .Values.podAnnotations } }
+      annotations:
+        { { - toYaml . | nindent 8 } }
+      { { - end } }
+      labels:
+        app: foo
+        { { - include "foo.selectorLabels" . | nindent 8 } }
+    spec:
+      { { - with .Values.imagePullSecrets } }
+      imagePullSecrets:
+  { { toYaml .Values.image.pullSecrets | indent 8 } }
+  { { - end } }
+serviceAccountName: { { include "foo.serviceAccountName" . } }
+containers:
+  - name: { { .Chart.Name } }
+    securityContext:
+      { { - toYaml .Values.securityContext | nindent 12 } }
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+    imagePullPolicy: { { .Values.image.pullPolicy } }
+    ports:
+      - name: http
+        containerPort: { { .Values.springboot.server.port } }
+        protocol: TCP
+    livenessProbe:
+      httpGet:
+        path: "/actuator/health/liveness"
+        port: { { .Values.actuator.port } }
+      initialDelaySeconds: { { .Values.liveness.initialDelaySeconds | default 300 } }
+      periodSeconds: { { .Values.liveness.periodSeconds | default 10 } }
+      timeoutSeconds: { { .Values.liveness.timeoutSeconds | default 1 } }
+      successThreshold: { { .Values.liveness.successThreshold | default 1 } }
+      failureThreshold: { { .Values.liveness.failureThreshold | default 3 } }
+    readinessProbe:
+      httpGet:
+        path: "/actuator/health/readiness"
+        port: { { .Values.actuator.port } }
+      initialDelaySeconds: { { .Values.readiness.initialDelaySeconds | default 10 } }
+      periodSeconds: { { .Values.readiness.periodSeconds | default 10 } }
+      timeoutSeconds: { { .Values.readiness.timeoutSeconds | default 1 } }
+      successThreshold: { { .Values.readiness.successThreshold | default 1 } }
+      failureThreshold: { { .Values.readiness.failureThreshold | default 3 } }
+    resources:
+      { { - toYaml .Values.resources | nindent 12 } }

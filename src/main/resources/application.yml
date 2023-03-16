@@ -1,0 +1,19 @@
+server:
+  port: 9080
+
+management:
+  server:
+    port: 9001
+  health:
+    defaults:
+      enabled: true
+  endpoint:
+    health:
+      enabled: true
+      probes:
+        enabled: true
+      show-details: always
+    info:
+      enabled: true
+
+

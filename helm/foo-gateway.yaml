@@ -1,0 +1,15 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: foo-gateway
+  namespace: demoistio
+spec:
+  selector:
+    istio: ingressgateway  # (1)
+  servers:
+    - hosts:
+        - "*"  # (2)
+      port: # (3)
+        name: http
+        number: 80
+        protocol: HTTP

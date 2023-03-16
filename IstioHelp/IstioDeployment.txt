@@ -1,0 +1,139 @@
+Istio Deployment
+
+Istio Release Page : https://github.com/istio/istio/releases
+
+1. Download the release
+	curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.17.1 TARGET_ARCH=x86_64 sh -
+2.
+	cd istio-1.17.1
+3.
+	export PATH=$PWD/bin:$PATH
+
+Check istioctl commands:
+1.	istioctl profile list
+1.	istioctl profile dump default
+
+minikube start --cpus=4 --memory=8192  --driver=none --kubernetes-version=v1.23.8
+
+
+Install Default Configuration Profile
+1.	istioctl install --set profile=default
+
+
+
+
+Docker Hub Registry Kubernetes Secret
+=====================================
+kubectl create secret docker-registry reg-cred --docker-server=https://index.docker.io/v1/ --docker-username=anirudhpatel --docker-password=$PASS --docker-email=patel3.anirudh@gmail.com
+kubectl get secret reg-cred --output="jsonpath={.data.\.dockerconfigjson}" | base64 --decode
+echo "cGF0.............jE=" | base64 --decode
+
+Create Secret in a Namespace
+============================
+kubectl create secret docker-registry reg-cred --docker-server=https://index.docker.io/v1/ --docker-username=anirudhpatel --docker-password=$PASS --docker-email=patel3.anirudh@gmail.com -n demoistio
+
+Create Namespace for Service
+============================
+kubectl create namespace demoistio
+kubectl get ns
+
+Istio Label Injection
+=====================
+kubectl label namespace demoistio istio-injection=enabled
+
+
+Deploy Service in Namespace : demoistio
+=======================================
+image:	index.docker.io/DOCKER_USER/PRIVATE_REPO_NAME:latest		dockerhub_username/repo_name:$TAG
+		index.docker.io/anirudhpatel/foo:latest	
+						OR
+		DOCKER_USER/PRIVATE_REPO_NAME:latest
+		anirudhpatel/foo:latest
+		
+./gradlew jibDockerBuild -Djib.to.image=ocr-docker-hosted.forge.avaya.com/cosmos-poc -Djib.to.tags=1.0,latest
+
+gradle jibDockerBuild -Djib.to.image=anirudhpatel/foo -Djib.to.tags=1.0,latest
+	
+	docker push anirudhpatel/foo:1.0 (remember to export GPG key for credential pass - #Patel333) 
+	docker run --name food -d -p 9080:9080 -p 9001:9001 anirudhpatel/foo:1.0
+	curl http://127.0.0.1:9080/v1/hello -H "Content-Type: application/json" -H "Accept: application/json"
+
+
+Helm Dry Run
+============
+helm install foo foo-0.1.0.tgz --dry-run --debug
+
+Helm Install
+============
+helm install foo foo-0.1.0.tgz
+
+Create Service Gateway
+======================
+	kubectl apply -f foo-gateway.yaml
+	kubectl describe gateway foo-gateway -n demoistio
+
+Get IP for Istio Ingress Gateway
+================================
+1.	kubectl get services -n istio-system
+	istio-ingressgateway   LoadBalancer   10.105.165.234   <pending>     15021:31606/TCP,80:32017/TCP,443:30727/TCP   24h
+	
+	
+2. Two Ways to get Public IP for Ingress Gateway LoadBalancer	
+	a) minikube Tunnel		(For proper cleanup : minikube tunnel --cleanup) : This does not work for accessing via Laptop
+	
+		[root@kub-master102 ~]# kubectl get services -n istio-system
+		NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP      PORT(S)                                      AGE
+		istio-ingressgateway   LoadBalancer   10.105.165.234   10.105.165.234   15021:31606/TCP,80:32017/TCP,443:30727/TCP   24h
+
+		GatewayIP =	kubectl get service istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}{"\n"}' ====> 10.105.165.234
+		  
+		Ingress Port =  kubectl get service istio-ingressgateway -n istio-system -o jsonpath='{.spec.ports[?(@.name=="http2")].port}{"\n"}' ====> 80
+		Ingress NodePort for(80) = kubectl get service istio-ingressgateway -n istio-system -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}{"\n"}' ====> 32017
+		
+	b) Laptop Access
+		Access via Minikube VM IP and NodePort:
+		Ingress NodePort for(80) = kubectl get service istio-ingressgateway -n istio-system -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}{"\n"}' ====> 32017
+		GATEWAY URL = VMIP:NodePort = 10.133.96.102:32017
+
+Access Service (ModHeader extension : add content-type and accept with application/json)
+========================================================================================
+http://10.133.96.102:32017/v1/hello => you will get 404 Not found since we have not yet created Virtual Service for our Application
+
+Create Virtual Service
+======================
+	kubectl apply -f foo-virtual-service.yaml
+
+Noe Access Service and it should work fine :
+	http://10.133.96.102:32017/v1/hello => Hello !!! This is foo
+
+
+Settuig Up Kiali and Prometheus
+===============================
+	
+	
+
+!!!!!	SIDECAR INJECTION FAILS 	!!!!!
+Workaround for ISTIO-INIT IPTABLES RESTORE issue:
+=================================================
+https://www.suse.com/support/kb/doc/?id=000020241
+https://github.com/istio/istio/issues/23009
+
+		 modprobe br_netfilter ; 
+		 modprobe nf_nat ;
+		 modprobe xt_REDIRECT ;
+		 modprobe xt_owner;
+		 modprobe iptable_nat;
+		 modprobe iptable_mangle;
+		 modprobe iptable_filter
+		 We ran this command to load these modules on all of our nodes in the downstream Kubernetes cluster that have the worker role. (EDIT: These commands take effect immediately, and do not persist if the node is rebooted.) In order to get the module loads to persist across reboots,
+		 we created a file -- /etc/modules-load.d/istio-modules-iptables.conf -- on each worker node with the following contents
+		 
+		cat >/etc/modules-load.d/istio-modules-iptables.conf <<EOF
+		br_netfilter
+		nf_nat
+		xt_REDIRECT
+		xt_owner
+		iptable_nat
+		iptable_mangle
+		iptable_filter
+		EOF
